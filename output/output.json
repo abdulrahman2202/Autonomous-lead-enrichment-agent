@@ -1,0 +1,38 @@
+[
+  {
+    "domain": "postman.com",
+    "company_overview": "Extraction could not be completed for postman.com. Could not parse valid JSON from LLM response for postman.com",
+    "target_audience": "Unavailable due to crawl or extraction limitation",
+    "contact_points": [],
+    "leadership": [],
+    "confidence_score": 0.0
+  },
+  {
+    "domain": "supabase.com",
+    "company_overview": "Supabase is a Postgres development platform that provides a suite of tools and services for building web and mobile applications, including authentication, data APIs, real-time data, and storage. It offers a fully managed Postgres database with a focus on open source and developer experience.",
+    "target_audience": "Developers building web and mobile applications, particularly those seeking a fully managed Postgres database solution with a focus on rapid development and scalability.",
+    "contact_points": [
+      "abuse@supabase.com",
+      "help-events@supabase.com",
+      "legal@supabase.com",
+      "privacy@supabase.com",
+      "security@supabase.com"
+    ],
+    "leadership": [
+      {
+        "name": "Seth",
+        "role": "Chief Innovation Officer",
+        "linkedin_url": "https://www.linkedin.com/company/supabase"
+      }
+    ],
+    "confidence_score": 0.95
+  },
+  {
+    "domain": "vapi.ai",
+    "company_overview": "Extraction could not be completed for vapi.ai. Could not parse valid JSON from LLM response for vapi.ai",
+    "target_audience": "Unavailable due to crawl or extraction limitation",
+    "contact_points": [],
+    "leadership": [],
+    "confidence_score": 0.0
+  }
+]
