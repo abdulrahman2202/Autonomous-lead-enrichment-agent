@@ -29,8 +29,8 @@
   },
   {
     "domain": "supabase.com",
-    "company_overview": "Supabase is a Postgres-based open-source Firebase alternative that provides a fully managed backend for developers building web and mobile applications. It offers a suite of tools including authentication, data APIs, real-time subscriptions, and storage, enabling developers to quickly build and scale their applications.",
-    "target_audience": "Developers building web and mobile applications, particularly those seeking a flexible, scalable, and easy-to-use backend solution with a strong focus on open-source technologies and Postgres.",
+    "company_overview": "Supabase is a Postgres-based open-source Firebase alternative that provides a fully managed backend for developers, offering features like authentication, real-time data, and storage. It empowers teams to build and scale applications quickly with a focus on developer experience and enterprise-grade security.",
+    "target_audience": "Developers and teams building web and mobile applications, particularly those seeking a flexible, scalable, and easy-to-use backend solution with a strong open-source community.",
     "contact_points": [
       "abuse@supabase.com",
       "help-events@supabase.com",
@@ -48,6 +48,11 @@
         "name": "Jason Warner",
         "role": "CTO",
         "linkedin_url": null
+      },
+      {
+        "name": "Pedro Canahuati",
+        "role": "CTO, Ex-Facebook",
+        "linkedin_url": null
       }
     ],
     "confidence_score": 0.95
@@ -55,7 +60,7 @@
   {
     "domain": "vapi.ai",
     "company_overview": "Vapi is a developer platform that enables businesses to build advanced voice AI agents. It handles the complex infrastructure, allowing companies to focus on creating engaging voice experiences for their customers.",
-    "target_audience": "Vapi’s target audience includes businesses of all sizes, particularly those seeking to improve customer support, automate workflows, and integrate voice AI into their operations. It caters to enterprises and organizations needing scalable voice agent solutions.",
+    "target_audience": "Vapi’s target audience includes businesses of all sizes, particularly those seeking to improve customer support, automate workflows, and engage with customers through voice interactions. It caters to enterprises and organizations needing scalable, reliable voice AI solutions.",
     "contact_points": [],
     "leadership": [
       {
