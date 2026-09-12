@@ -6,6 +6,7 @@ anti-hallucinatory company intelligence extraction with strict schema validation
 
 import json
 import logging
+import re
 from typing import Any
 import ollama
 from pydantic import ValidationError
@@ -16,6 +17,101 @@ from app.utils import extract_and_parse_json
 logger = logging.getLogger("lead_enrichment")
 
 DEFAULT_MODEL = "gemma3:latest"
+
+DISALLOWED_ROLE_TERMS = (
+    "investor",
+    "angel",
+    "venture",
+    "advisor",
+    "adviser",
+    "board member",
+    "board observer",
+    "partner",
+    "customer",
+    "client",
+    "speaker",
+    "guest",
+    "author",
+    "writer",
+    "attendee",
+)
+
+LEADERSHIP_ROLE_INDICATORS = (
+    "ceo",
+    "cto",
+    "coo",
+    "cfo",
+    "cpo",
+    "cro",
+    "cmo",
+    "cio",
+    "cso",
+    "founder",
+    "co-founder",
+    "cofounder",
+    "president",
+    "vp",
+    "vice president",
+    "chief",
+    "head of",
+    "head",
+    "director",
+    "officer",
+    "executive",
+    "general manager",
+)
+
+GENERIC_TITLE_PREFIXES = {
+    "co",
+    "vice",
+    "deputy",
+    "assistant",
+    "associate",
+    "interim",
+    "acting",
+    "group",
+    "executive",
+    "senior",
+    "lead",
+    "principal",
+    "managing",
+    "chief",
+    "founding",
+    "global",
+}
+
+GENERIC_DEPARTMENTS = {
+    "the",
+    "our",
+    "company",
+    "software",
+    "engineering",
+    "product",
+    "technology",
+    "design",
+    "operations",
+    "finance",
+    "legal",
+    "marketing",
+    "sales",
+    "platform",
+    "ai",
+    "data",
+    "cloud",
+    "security",
+    "infrastructure",
+    "growth",
+    "people",
+    "customer",
+    "business",
+    "strategy",
+    "innovation",
+    "developer",
+    "research",
+    "communications",
+    "devops",
+    "hardware",
+}
 
 EXTRACTION_SYSTEM_PROMPT = """You are a company intelligence extraction system.
 Analyze the supplied website evidence and extract structured company data.
@@ -41,7 +137,16 @@ RULES:
    - confidence_score -> lower value (0.0 to 0.5) reflecting missing evidence
 7. Do not omit any fields.
 8. Use ONLY supplied website evidence. Never invent people, roles, emails, or LinkedIn URLs.
-9. Never assign a company LinkedIn URL (/company/...) to an individual leader. Only use individual /in/ URLs from verified evidence, or null."""
+9. TARGET-COMPANY LEADERSHIP RULES:
+   - Use the EXACT name as it appears in the website text evidence, whether it has one name (e.g. 'Seth'), two names (e.g. 'Abhinav Asthana'), or multiple names. Never invent, complete, or guess missing parts of names.
+   - The candidate must be an actual executive or leader of the target company itself (e.g. CEO, Co-founder, Founder, CTO, COO, CPO, President, VP, Chief Officer, Head of, Director).
+   - Return all strong evidence-supported leadership candidates (typically 2-5 leaders). Do not unnecessarily reduce valid candidates to only one person.
+   - STRICTLY EXCLUDE people whose leadership role belongs to another company (e.g. reject 'Tyler McGinnis - UI.dev Cofounder', 'Vercel Founder', 'GitHub CTO', 'Docker Cofounder').
+   - STRICTLY EXCLUDE investors, venture capitalists, advisors, customers, and conference speakers.
+   - If a person's role specifies an external organization, DO NOT include them.
+   - When uncertain or evidence is ambiguous, exclude rather than hallucinate.
+   - If no clear target-company executive leadership is explicitly identified in the website text, return "leadership": [].
+10. Never assign a company LinkedIn URL (/company/...) to an individual leader. Only use individual /in/ URLs from verified evidence, or null."""
 
 
 def build_extraction_prompt(
@@ -83,7 +188,7 @@ Return a single JSON object with this exact structure:
   "contact_points": {emails_json},
   "leadership": [
     {{
-      "name": "<name of executive/leader explicitly identified in text>",
+      "name": "<exact name of executive/leader as explicitly identified in text>",
       "role": "<role/title explicitly identified in text>",
       "linkedin_url": null
     }}
@@ -94,9 +199,108 @@ Return a single JSON object with this exact structure:
 CRITICAL INSTRUCTIONS:
 - Do NOT return {{}}.
 - Do NOT omit any fields.
-- If no leadership members are explicitly named in the website content, set "leadership": [].
+- LEADERSHIP: Return all strong, evidence-supported leadership members of {domain} (target 2 to 5 primary leaders).
+  * Use the EXACT name from the website evidence, whether it has one name (e.g. 'Seth') or multiple names (e.g. 'Abhinav Asthana', 'Ankit Sobti'). Never invent or expand names.
+  * Candidate MUST be an executive or leader of {domain} itself.
+  * STRICTLY EXCLUDE founders, executives, or leaders of OTHER companies (e.g. 'Tyler McGinnis - UI.dev Cofounder', 'Vercel Founder', 'GitHub CTO').
+  * STRICTLY EXCLUDE investors, venture capitalists, advisors, customers, speakers, or external partners.
+  * If no executive leaders of {domain} are explicitly named in the website content, set "leadership": [].
 - Never assign a company LinkedIn URL (/company/...) to an individual person; use null instead.
 - Output raw JSON only."""
+
+
+def is_valid_name(name: str, context_text: str = "") -> bool:
+    """Verifies that a candidate name is non-empty and grounded in the evidence.
+
+    Accepts single names (e.g. 'Seth'), two names, or multiple names exactly
+    as they appear in the crawled content. Rejects empty or invalid strings.
+    """
+    if not name or not isinstance(name, str):
+        return False
+
+    cleaned = name.strip()
+    if len(cleaned) < 2:
+        return False
+
+    # Must contain at least one alphabetic character
+    if not any(c.isalpha() for c in cleaned):
+        return False
+
+    # Reject obvious non-name placeholders
+    if cleaned.lower() in ("null", "none", "unknown", "n/a", "undefined", "leadership", "team"):
+        return False
+
+    # If context is available, ensure the name actually appears in the text evidence
+    if context_text and cleaned.lower() not in context_text.lower():
+        return False
+
+    return True
+
+
+def is_valid_leadership_role(role: str, domain: str = "") -> bool:
+    """Checks if a role describes a bona fide leadership position of the target company.
+
+    Enforces that:
+    1. The role represents a senior/executive leadership title.
+    2. The role is NOT an investor, advisor, customer, or partner.
+    3. The role belongs to the target company and NOT an external organization
+       (e.g. rejects 'UI.dev Cofounder' or 'Vercel Founder' when evaluating Supabase).
+    """
+    if not role or not isinstance(role, str):
+        return False
+
+    lowered = role.lower().strip()
+
+    # 1. Reject explicitly disallowed role categories (investors, advisors, etc.)
+    if any(term in lowered for term in DISALLOWED_ROLE_TERMS):
+        return False
+
+    # 2. Must contain a recognized leadership/executive indicator
+    if not any(indicator in lowered for indicator in LEADERSHIP_ROLE_INDICATORS):
+        return False
+
+    if not domain:
+        return True
+
+    # 3. Check for external company references in role
+    company_brand = domain.split(".")[0].lower()
+
+    # 3a. Reject if an external web domain appears in role (e.g. 'UI.dev Cofounder')
+    domain_match = re.search(
+        r"\b[A-Za-z0-9_-]+\.(?:dev|com|ai|io|org|net|co|app)\b", role, re.IGNORECASE
+    )
+    if domain_match:
+        matched_domain = domain_match.group(0).lower()
+        if company_brand not in matched_domain and domain.lower() not in matched_domain:
+            return False
+
+    # 3b. Check for '<Org> <Title>' patterns where Org != target company (e.g. 'Vercel Founder', 'GitHub CTO')
+    prefix_match = re.match(
+        r"^([A-Za-z0-9_.-]+)\s+(?:ceo|cto|coo|cfo|cpo|cro|cmo|cio|founder|cofounder|co-founder|president|vp|director|head)\b",
+        role,
+        re.IGNORECASE,
+    )
+    if prefix_match:
+        prefix_word = prefix_match.group(1).lower().strip()
+        if (
+            prefix_word not in GENERIC_TITLE_PREFIXES
+            and prefix_word != company_brand
+            and company_brand not in prefix_word
+        ):
+            return False
+
+    # 3c. Check for '<Title> at/of/@ <Org>' where Org != target company and not a generic department
+    org_match = re.search(r"\b(?:at|of|@)\s+([A-Za-z0-9_.-]+)", role, re.IGNORECASE)
+    if org_match:
+        org_word = org_match.group(1).lower().strip()
+        if (
+            org_word != company_brand
+            and company_brand not in org_word
+            and org_word not in GENERIC_DEPARTMENTS
+        ):
+            return False
+
+    return True
 
 
 def normalize_extracted_data(
@@ -104,6 +308,7 @@ def normalize_extracted_data(
     domain: str,
     discovered_emails: list[str],
     discovered_linkedin_urls: list[str],
+    optimized_context: str = "",
 ) -> dict:
     """Normalizes raw LLM output, enforcing deterministic evidence and schema integrity.
 
@@ -112,6 +317,7 @@ def normalize_extracted_data(
         domain: Target company domain.
         discovered_emails: Authoritative emails extracted by Python crawler.
         discovered_linkedin_urls: Authoritative LinkedIn URLs extracted by Python crawler.
+        optimized_context: Raw website context for cross-referencing candidate grounding.
 
     Returns:
         Normalized dictionary ready for strict Pydantic validation.
@@ -123,18 +329,20 @@ def normalize_extracted_data(
 
     # 2. Text fields: ensure string type and clean whitespace
     raw_overview = normalized.get("company_overview")
-    normalized["company_overview"] = str(raw_overview).strip() if raw_overview is not None else ""
+    normalized["company_overview"] = (
+        str(raw_overview).strip() if raw_overview is not None else ""
+    )
 
     raw_audience = normalized.get("target_audience")
-    normalized["target_audience"] = str(raw_audience).strip() if raw_audience is not None else ""
+    normalized["target_audience"] = (
+        str(raw_audience).strip() if raw_audience is not None else ""
+    )
 
     # 3. Deterministic Contact Points: Python-discovered emails are strictly authoritative
-    # Discard any email invented by the LLM that wasn't actually discovered on the website
     valid_crawler_emails = set(discovered_emails)
     normalized["contact_points"] = sorted(valid_crawler_emails)
 
-    # 4. Leadership & LinkedIn URL validation
-    # Differentiate individual profiles (/in/) from company pages (/company/)
+    # 4. Leadership & LinkedIn URL validation (selective, high-signal leadership)
     valid_individual_profiles = {
         u.rstrip("/").lower(): u.rstrip("/")
         for u in discovered_linkedin_urls
@@ -142,7 +350,9 @@ def normalize_extracted_data(
     }
 
     normalized_leadership = []
+    seen_names: set[str] = set()
     raw_leadership = normalized.get("leadership")
+
     if isinstance(raw_leadership, list):
         for member in raw_leadership:
             if not isinstance(member, dict):
@@ -150,6 +360,18 @@ def normalize_extracted_data(
             name = str(member.get("name") or "").strip()
             role = str(member.get("role") or "").strip()
             if not name or not role:
+                continue
+
+            # 4a. Validate name is non-empty and grounded in evidence (accepts single names like 'Seth')
+            if not is_valid_name(name, optimized_context):
+                continue
+
+            name_key = name.lower()
+            if name_key in seen_names:
+                continue
+
+            # 4b. Enforce leadership role validity and reject external organizations
+            if not is_valid_leadership_role(role, domain):
                 continue
 
             raw_li = member.get("linkedin_url")
@@ -166,6 +388,7 @@ def normalize_extracted_data(
                 else:
                     clean_li = None
 
+            seen_names.add(name_key)
             normalized_leadership.append(
                 {
                     "name": name,
@@ -173,6 +396,11 @@ def normalize_extracted_data(
                     "linkedin_url": clean_li,
                 }
             )
+
+            # Cap at 5 key leaders to prioritize quality over quantity
+            if len(normalized_leadership) >= 5:
+                break
+
     normalized["leadership"] = normalized_leadership
 
     # 5. Confidence score normalization if omitted
@@ -276,6 +504,7 @@ def extract_company_intelligence(
         domain=domain,
         discovered_emails=discovered_emails,
         discovered_linkedin_urls=discovered_linkedin_urls,
+        optimized_context=optimized_context,
     )
 
     # Step 4: Strict Pydantic Schema Validation (no silent clamping of confidence score)

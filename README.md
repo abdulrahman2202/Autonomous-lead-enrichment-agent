@@ -1,14 +1,14 @@
 # Autonomous Lead Enrichment Agent
 
-An autonomous, local AI-driven intelligence pipeline that accepts company domains, crawls public web surfaces using Playwright, filters high-signal corporate pages, extracts clean text using BeautifulSoup, deterministically discovers verified contact points (emails and LinkedIn profiles), optimizes context, and extracts structured, validated company intelligence using Ollama and Gemma 3 (`gemma3:latest`).
+An autonomous, local AI-driven intelligence pipeline that accepts company domains, crawls public web surfaces using Playwright, filters high-signal corporate pages, extracts clean text using BeautifulSoup, deterministically discovers publicly discoverable contact points (emails and LinkedIn profiles), optimizes context, and extracts structured, validated company intelligence using Ollama and Gemma 3 (`gemma3:latest`).
 
 ---
 
 ## Overview
 
-Modern B2B sales development and lead qualification require accurate, real-time company intelligence (overview, ICP/target audience, verified contacts, and leadership teams). Relying on manual web browsing is slow and inconsistent, while sending raw webpage HTML to LLMs wastes context tokens, causes hallucination, and exposes pipelines to high latency and vendor lock-in.
+Modern B2B sales development and lead qualification require accurate, real-time company intelligence (overview, ICP/target audience, publicly discoverable contacts, and leadership teams). Relying on manual web browsing is slow and inconsistent, while sending raw webpage HTML to LLMs wastes context tokens, causes hallucination, and exposes pipelines to high latency and vendor lock-in.
 
-This project delivers a resilient, fully local, and production-ready enrichment pipeline. It extracts real-time signals directly from public company websites, applies deterministic regex filters for contact points, feeds optimized context into a locally hosted **Gemma 3** model, and enforces strict schema compliance through **Pydantic**.
+This project delivers a resilient, fully local enrichment pipeline designed for reliable batch processing. It extracts real-time signals directly from public company websites, applies deterministic regex filters for contact points, feeds optimized context into a locally hosted **Gemma 3** model, and enforces strict schema compliance through **Pydantic**.
 
 ---
 
@@ -29,7 +29,7 @@ The Autonomous Lead Enrichment Agent solves these issues with headless browser r
 - **Headless Chromium Automation:** Uses Playwright to render JavaScript-heavy landing pages and handle dynamic DOM hydration.
 - **Heuristic Page Discovery:** Intelligently discovers and prioritizes high-value corporate pages (`about`, `company`, `team`, `leadership`, `contact`, `pricing`, `product`) while filtering noise (`login`, `signup`, `privacy`, `terms`, `docs`, `blog`, `careers`).
 - **Clean HTML Stripping:** Decomposes non-content tags (`script`, `style`, `noscript`, `svg`, `nav`, `footer`, `iframe`) via BeautifulSoup to supply pure plain text to the LLM.
-- **Deterministic Contact Extraction:** Extracts real public emails and LinkedIn URLs directly from DOM links and text using strict regex filters, preventing the LLM from inventing contacts.
+- **Deterministic Contact Extraction:** Extracts publicly discoverable emails and LinkedIn URLs directly from crawled pages using strict regex filters, keeping contact discovery independent from LLM generation.
 - **Predictable Context Optimization:** Implements character budgeting per page and total context limits to maximize signal-to-noise and prevent context overflow.
 - **Local & Private LLM Extraction:** Exclusively runs **Ollama** with `gemma3:latest`, eliminating API costs, rate limits, and third-party data transmission.
 - **Strict Pydantic Validation:** Enforces schema integrity on LLM responses with boundary checks (`0.0 <= confidence_score <= 1.0`) and markdown fence stripping.
@@ -179,22 +179,27 @@ python -m app.main
 
 ### Demonstration Logs
 During execution, clean logs indicate progress across all phases:
+
+Example execution:
+
 ```
 ==================================================
 Starting Autonomous Lead Enrichment Agent Pipeline
 Target Companies: postman.com, supabase.com, vapi.ai
 ==================================================
---------------------------------------------------
+
 [INFO] Processing postman.com
 [INFO] Homepage fetched (200)
-[INFO] Relevant pages discovered: 5 (Total internal: 28)
+[INFO] Relevant pages discovered: ...
 [INFO] Content cleaned across 6 pages
-[INFO] Emails discovered: 1
-[INFO] LinkedIn URLs discovered: 1
+[INFO] Emails discovered: ...
+[INFO] LinkedIn URLs discovered: ...
 [INFO] Sending context to Gemma 3 (gemma3:latest)
 [INFO] LLM response received
 [INFO] Pydantic validation successful
+
 ...
+
 ==================================================
 [INFO] Pipeline complete! Output successfully written to: ...\output\output.json
 [INFO] Processed 3 companies.
@@ -212,7 +217,7 @@ Results are saved to `output/output.json` as a formatted JSON array conforming t
   {
     "domain": "postman.com",
     "company_overview": "Postman is an API platform for building, testing, and managing APIs across the complete development lifecycle. It simplifies API collaboration and streamlines workflow automation for developers and enterprise teams.",
-    "target_audience": "Software developers, API engineers, product managers, and enterprise engineering teams building or integrating REST, GraphQL, or gRPC APIs.",
+    "target_audience": "Software developers, API engineers, product managers, and enterprise engineering teams building or integrating APIs.",
     "contact_points": [
       "help@postman.com"
     ],
@@ -220,7 +225,7 @@ Results are saved to `output/output.json` as a formatted JSON array conforming t
       {
         "name": "Abhinav Asthana",
         "role": "CEO and Co-founder",
-        "linkedin_url": "https://www.linkedin.com/company/postman-platform"
+        "linkedin_url": "https://www.linkedin.com/in/abhinavasthana"
       }
     ],
     "confidence_score": 0.95
@@ -233,7 +238,7 @@ Results are saved to `output/output.json` as a formatted JSON array conforming t
 - **`company_overview`** *(str)*: Concise two-sentence explanation of what the company does.
 - **`target_audience`** *(str)*: Identified Ideal Customer Profile (ICP) and intended users.
 - **`contact_points`** *(list[str])*: Public/generic contact emails discovered on the website.
-- **`leadership`** *(list[LeadershipMember])*: Array of executives with `name`, `role`, and optional verified `linkedin_url`.
+- **`leadership`** *(list[LeadershipMember])*: Array of executives with `name`, `role`, and optional discovered `linkedin_url`.
 - **`confidence_score`** *(float)*: Strictly bounded between `0.0` and `1.0`.
 
 ---
@@ -251,8 +256,8 @@ To ensure deterministic performance, low latency, and zero token-budget truncati
    - Extracts plain visible text while preserving logical paragraph and heading line breaks.
 
 3. **Character Budgeting & Deduplication:**
-   - **Per-Page Ceiling:** Truncates any individual page content to 3,500 characters.
-   - **Total Context Budget:** Enforces an aggregate ceiling of 12,000 characters across all combined pages per company.
+   - **Per-Page Ceiling:** Truncates any individual page content to 2,500 characters.
+   - **Total Context Budget:** Enforces an aggregate ceiling of 8,000 characters across all combined pages per company.
    - **Chunk Deduplication:** Tracks structural fingerprints across pages to avoid repeating shared legal or banner snippets.
 
 ---
