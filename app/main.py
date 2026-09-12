@@ -84,6 +84,7 @@ def run_pipeline(
                     fallback = create_fallback_company_data(
                         domain=domain,
                         error_message=crawl_result.get("error", "No pages crawled"),
+                        contact_points=crawl_result.get("discovered_emails", []),
                     )
                     results.append(fallback)
                     continue
@@ -106,6 +107,7 @@ def run_pipeline(
                 fallback = create_fallback_company_data(
                     domain=domain,
                     error_message=f"Pipeline exception: {str(e)}",
+                    contact_points=crawl_result.get("discovered_emails", []) if "crawl_result" in locals() else [],
                 )
                 results.append(fallback)
 

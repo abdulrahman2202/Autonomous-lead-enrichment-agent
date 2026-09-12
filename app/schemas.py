@@ -43,12 +43,20 @@ class CompanyData(BaseModel):
     )
 
 
-def create_fallback_company_data(domain: str, error_message: str = "") -> CompanyData:
+def create_fallback_company_data(
+    domain: str,
+    error_message: str = "",
+    contact_points: list[str] | None = None,
+) -> CompanyData:
     """Creates a safe fallback CompanyData record when extraction or validation fails.
+
+    Preserves verified contact points discovered by the crawler while assigning zero
+    confidence to unverified fields.
 
     Args:
         domain: The domain that failed processing.
         error_message: Optional reason for the failure.
+        contact_points: Optional verified contact emails extracted from the website.
 
     Returns:
         A valid CompanyData instance with zero confidence score.
@@ -60,7 +68,8 @@ def create_fallback_company_data(domain: str, error_message: str = "") -> Compan
         domain=domain,
         company_overview=overview_text,
         target_audience="Unavailable due to crawl or extraction limitation",
-        contact_points=[],
+        contact_points=contact_points or [],
         leadership=[],
         confidence_score=0.0,
     )
+

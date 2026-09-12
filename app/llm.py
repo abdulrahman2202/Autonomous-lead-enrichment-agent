@@ -11,25 +11,37 @@ import ollama
 from pydantic import ValidationError
 
 from app.schemas import CompanyData, create_fallback_company_data
-from app.utils import clean_and_parse_json
+from app.utils import extract_and_parse_json
 
 logger = logging.getLogger("lead_enrichment")
 
 DEFAULT_MODEL = "gemma3:latest"
 
 EXTRACTION_SYSTEM_PROMPT = """You are a company intelligence extraction system.
-Your task is to analyze extracted public website evidence and produce structured, factual company intelligence.
+Analyze the supplied website evidence and extract structured company data.
 
-STRICT ANTI-HALLUCINATION RULES:
-1. Rely EXCLUSIVELY on the provided website evidence and verified contact evidence.
-2. Absolutely DO NOT use external knowledge, training memory, or assumptions not grounded in the text.
-3. Absolutely DO NOT invent people, executives, emails, or URLs.
-4. Only include leadership members if their name and role are explicitly mentioned in the provided text.
-5. Only include emails that are present in the provided contact evidence or text.
-6. Only include LinkedIn URLs that are present in the provided evidence.
-7. If any information (e.g. leadership, contact emails) is absent or incomplete in the evidence, return an empty list [] or null.
-8. The confidence_score must be a float strictly between 0.0 and 1.0 reflecting the completeness and factual grounding of the evidence.
-9. Output ONLY a valid JSON object matching the required schema. No introductory text, no conversational commentary, and no markdown outside the JSON."""
+RULES:
+1. Return EXACTLY ONE JSON object.
+2. Return JSON ONLY.
+3. No Markdown, no code fences (do not use ```json), and no explanations.
+4. NEVER return {}.
+5. Always return all six required top-level fields:
+   - "domain": string
+   - "company_overview": string
+   - "target_audience": string
+   - "contact_points": list of strings
+   - "leadership": list of objects
+   - "confidence_score": float (between 0.0 and 1.0)
+6. If information is unavailable from the supplied evidence:
+   - company_overview -> ""
+   - target_audience -> ""
+   - contact_points -> []
+   - leadership -> []
+   - linkedin_url -> null
+   - confidence_score -> lower value (0.0 to 0.5) reflecting missing evidence
+7. Do not omit any fields.
+8. Use ONLY supplied website evidence. Never invent people, roles, emails, or LinkedIn URLs.
+9. Never assign a company LinkedIn URL (/company/...) to an individual leader. Only use individual /in/ URLs from verified evidence, or null."""
 
 
 def build_extraction_prompt(
@@ -49,41 +61,128 @@ def build_extraction_prompt(
     Returns:
         Formatted prompt string.
     """
-    emails_str = json.dumps(discovered_emails) if discovered_emails else "[] (None found on site)"
-    linkedin_str = (
-        json.dumps(discovered_linkedin_urls)
-        if discovered_linkedin_urls
-        else "[] (None found on site)"
+    emails_json = json.dumps(discovered_emails) if discovered_emails else "[]"
+    linkedin_json = (
+        json.dumps(discovered_linkedin_urls) if discovered_linkedin_urls else "[]"
     )
 
     return f"""Target Company Domain: {domain}
 
-VERIFIED CONTACT EVIDENCE:
-- Discovered Public Emails: {emails_str}
-- Discovered LinkedIn URLs: {linkedin_str}
+VERIFIED CONTACT EVIDENCE (DISCOVERED ON WEBSITE):
+- Discovered Emails: {emails_json}
+- Discovered LinkedIn URLs: {linkedin_json}
 
-WEBSITE TEXT EVIDENCE:
+WEBSITE CONTENT:
 {optimized_context}
 
-EXPECTED OUTPUT JSON SCHEMA:
+Return a single JSON object with this exact structure:
 {{
   "domain": "{domain}",
-  "company_overview": "<Approx two concise sentences summarizing what the company does and its core offering>",
-  "target_audience": "<Primary Ideal Customer Profile (ICP) and who the product is built for>",
-  "contact_points": [
-    "<generic or public emails strictly from the verified contact evidence above, or empty list if none>"
-  ],
+  "company_overview": "<two concise sentences about what the company does and its core offering>",
+  "target_audience": "<primary Ideal Customer Profile and target audience>",
+  "contact_points": {emails_json},
   "leadership": [
     {{
-      "name": "<Full name of executive/leader explicitly identified in the text>",
-      "role": "<Title/position>",
-      "linkedin_url": "<Matching LinkedIn URL from verified evidence, or null>"
+      "name": "<name of executive/leader explicitly identified in text>",
+      "role": "<role/title explicitly identified in text>",
+      "linkedin_url": null
     }}
   ],
-  "confidence_score": <float between 0.0 and 1.0>
+  "confidence_score": 0.9
 }}
 
-Extract the company intelligence now and output strictly the JSON object:"""
+CRITICAL INSTRUCTIONS:
+- Do NOT return {{}}.
+- Do NOT omit any fields.
+- If no leadership members are explicitly named in the website content, set "leadership": [].
+- Never assign a company LinkedIn URL (/company/...) to an individual person; use null instead.
+- Output raw JSON only."""
+
+
+def normalize_extracted_data(
+    parsed_json: dict,
+    domain: str,
+    discovered_emails: list[str],
+    discovered_linkedin_urls: list[str],
+) -> dict:
+    """Normalizes raw LLM output, enforcing deterministic evidence and schema integrity.
+
+    Args:
+        parsed_json: Raw dictionary parsed from the LLM output.
+        domain: Target company domain.
+        discovered_emails: Authoritative emails extracted by Python crawler.
+        discovered_linkedin_urls: Authoritative LinkedIn URLs extracted by Python crawler.
+
+    Returns:
+        Normalized dictionary ready for strict Pydantic validation.
+    """
+    normalized = dict(parsed_json)
+
+    # 1. Enforce domain
+    normalized["domain"] = domain
+
+    # 2. Text fields: ensure string type and clean whitespace
+    raw_overview = normalized.get("company_overview")
+    normalized["company_overview"] = str(raw_overview).strip() if raw_overview is not None else ""
+
+    raw_audience = normalized.get("target_audience")
+    normalized["target_audience"] = str(raw_audience).strip() if raw_audience is not None else ""
+
+    # 3. Deterministic Contact Points: Python-discovered emails are strictly authoritative
+    # Discard any email invented by the LLM that wasn't actually discovered on the website
+    valid_crawler_emails = set(discovered_emails)
+    normalized["contact_points"] = sorted(valid_crawler_emails)
+
+    # 4. Leadership & LinkedIn URL validation
+    # Differentiate individual profiles (/in/) from company pages (/company/)
+    valid_individual_profiles = {
+        u.rstrip("/").lower(): u.rstrip("/")
+        for u in discovered_linkedin_urls
+        if "/in/" in u.lower()
+    }
+
+    normalized_leadership = []
+    raw_leadership = normalized.get("leadership")
+    if isinstance(raw_leadership, list):
+        for member in raw_leadership:
+            if not isinstance(member, dict):
+                continue
+            name = str(member.get("name") or "").strip()
+            role = str(member.get("role") or "").strip()
+            if not name or not role:
+                continue
+
+            raw_li = member.get("linkedin_url")
+            clean_li = None
+            if isinstance(raw_li, str) and raw_li.strip():
+                cand_li = raw_li.strip().rstrip("/")
+                # Strictly reject company URLs for individuals
+                if "/company/" in cand_li.lower():
+                    clean_li = None
+                elif "/in/" in cand_li.lower():
+                    # Must match an actual individual profile discovered on the site
+                    matched = valid_individual_profiles.get(cand_li.lower())
+                    clean_li = matched
+                else:
+                    clean_li = None
+
+            normalized_leadership.append(
+                {
+                    "name": name,
+                    "role": role,
+                    "linkedin_url": clean_li,
+                }
+            )
+    normalized["leadership"] = normalized_leadership
+
+    # 5. Confidence score normalization if omitted
+    if "confidence_score" not in normalized or normalized["confidence_score"] is None:
+        if normalized["company_overview"] and normalized["target_audience"]:
+            normalized["confidence_score"] = 0.8
+        else:
+            normalized["confidence_score"] = 0.0
+
+    return normalized
 
 
 def extract_company_intelligence(
@@ -125,12 +224,15 @@ def extract_company_intelligence(
             options={
                 "temperature": 0.1,
                 "top_p": 0.9,
+                "num_ctx": 8192,
             },
         )
     except Exception as e:
         err_msg = f"Ollama extraction failed for {domain}: {str(e)}"
         logger.error(f"[ERROR] {err_msg}")
-        return create_fallback_company_data(domain, error_message=err_msg)
+        return create_fallback_company_data(
+            domain, error_message=err_msg, contact_points=discovered_emails
+        )
 
     # Safely retrieve content across different ollama python client versions
     raw_content = ""
@@ -143,28 +245,57 @@ def extract_company_intelligence(
 
     logger.info("[INFO] LLM response received")
 
-    # Clean and parse JSON
-    parsed_json = clean_and_parse_json(raw_content)
+    # Step 1: Clean and parse JSON using robust extraction pipeline
+    parsed_json = extract_and_parse_json(raw_content)
 
-    if not parsed_json:
+    if parsed_json is None:
         err_msg = f"Could not parse valid JSON from LLM response for {domain}"
-        logger.warning(f"[WARNING] {err_msg}. Raw response preview: {raw_content[:200]}")
-        return create_fallback_company_data(domain, error_message=err_msg)
+        logger.warning(
+            f"[WARNING] {err_msg}. Raw response preview: {raw_content[:200]}"
+        )
+        return create_fallback_company_data(
+            domain, error_message=err_msg, contact_points=discovered_emails
+        )
 
-    # Strict Pydantic Schema Validation (no silent clamping)
+    # Step 2: Handle empty dict {} or completely unpopulated response
+    if not parsed_json or (
+        not parsed_json.get("company_overview")
+        and not parsed_json.get("target_audience")
+    ):
+        err_msg = f"LLM returned an empty or unpopulated object for {domain}"
+        logger.warning(f"[WARNING] {err_msg}. Applying safe fallback.")
+        return create_fallback_company_data(
+            domain,
+            error_message="LLM returned an empty object with no company intelligence.",
+            contact_points=discovered_emails,
+        )
+
+    # Step 3: Normalize fields and enforce deterministic evidence
+    normalized_data = normalize_extracted_data(
+        parsed_json=parsed_json,
+        domain=domain,
+        discovered_emails=discovered_emails,
+        discovered_linkedin_urls=discovered_linkedin_urls,
+    )
+
+    # Step 4: Strict Pydantic Schema Validation (no silent clamping of confidence score)
     try:
-        # Enforce target domain in the parsed dictionary
-        parsed_json["domain"] = domain
-        company_data = CompanyData.model_validate(parsed_json)
+        company_data = CompanyData.model_validate(normalized_data)
         logger.info("[INFO] Pydantic validation successful")
         return company_data
     except ValidationError as ve:
         err_msg = f"Pydantic validation error for {domain}: {ve.errors()}"
         logger.warning(f"[WARNING] {err_msg}")
         return create_fallback_company_data(
-            domain, error_message=f"Schema validation failed: {str(ve)}"
+            domain,
+            error_message=f"Schema validation failed: {str(ve)}",
+            contact_points=discovered_emails,
         )
     except Exception as ex:
         err_msg = f"Unexpected error during model validation for {domain}: {str(ex)}"
         logger.warning(f"[WARNING] {err_msg}")
-        return create_fallback_company_data(domain, error_message=err_msg)
+        return create_fallback_company_data(
+            domain,
+            error_message=err_msg,
+            contact_points=discovered_emails,
+        )

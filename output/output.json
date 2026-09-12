@@ -1,16 +1,36 @@
 [
   {
     "domain": "postman.com",
-    "company_overview": "Extraction could not be completed for postman.com. Could not parse valid JSON from LLM response for postman.com",
-    "target_audience": "Unavailable due to crawl or extraction limitation",
-    "contact_points": [],
-    "leadership": [],
-    "confidence_score": 0.0
+    "company_overview": "Postman is an API platform designed to simplify the entire API lifecycle, from development to management and distribution. It enables engineers and enterprises to build, test, and manage APIs more efficiently, fostering collaboration and innovation.",
+    "target_audience": "Postman’s primary target audience is software developers, API architects, and IT professionals involved in building, testing, and managing APIs across various industries.",
+    "contact_points": [
+      "help@postman.com",
+      "info-jp@postman.com",
+      "info@postman.com"
+    ],
+    "leadership": [
+      {
+        "name": "Abhinav Asthana",
+        "role": "CEO and Co-founder",
+        "linkedin_url": "https://www.linkedin.com/in/abhinavasthana"
+      },
+      {
+        "name": "Ankit Sobti",
+        "role": "Co-founder",
+        "linkedin_url": "https://www.linkedin.com/in/ankit-sobti"
+      },
+      {
+        "name": "Abhijit Kane",
+        "role": "Co-founder",
+        "linkedin_url": "https://in.linkedin.com/in/abhijitkane"
+      }
+    ],
+    "confidence_score": 0.99
   },
   {
     "domain": "supabase.com",
-    "company_overview": "Supabase is a Postgres development platform that provides a suite of tools and services for building web and mobile applications, including authentication, data APIs, real-time data, and storage. It offers a fully managed Postgres database with a focus on open source and developer experience.",
-    "target_audience": "Developers building web and mobile applications, particularly those seeking a fully managed Postgres database solution with a focus on rapid development and scalability.",
+    "company_overview": "Supabase is a Postgres-based open-source Firebase alternative that provides a fully managed backend for developers. It offers a suite of tools and services, including authentication, data APIs, real-time subscriptions, and storage, allowing developers to build and scale applications quickly.",
+    "target_audience": "Developers building web and mobile applications, particularly those seeking a flexible, scalable, and open-source alternative to traditional backend solutions. It targets teams building AI-powered applications and those needing a robust, enterprise-grade database platform.",
     "contact_points": [
       "abuse@supabase.com",
       "help-events@supabase.com",
@@ -22,17 +42,193 @@
       {
         "name": "Seth",
         "role": "Chief Innovation Officer",
-        "linkedin_url": "https://www.linkedin.com/company/supabase"
+        "linkedin_url": null
+      },
+      {
+        "name": "Alana Anderson",
+        "role": "Investor",
+        "linkedin_url": null
+      },
+      {
+        "name": "Alex Solomon",
+        "role": "Investor",
+        "linkedin_url": null
+      },
+      {
+        "name": "Ankit Jain",
+        "role": "Investor",
+        "linkedin_url": null
+      },
+      {
+        "name": "Aron Korenblit",
+        "role": "Investor",
+        "linkedin_url": null
+      },
+      {
+        "name": "Astasia Myers",
+        "role": "Investor",
+        "linkedin_url": null
+      },
+      {
+        "name": "Ben Tossell",
+        "role": "Makerpad Founder",
+        "linkedin_url": null
+      },
+      {
+        "name": "Brian Douglas",
+        "role": "GitHub DevRel",
+        "linkedin_url": null
+      },
+      {
+        "name": "Brianne Kimmel",
+        "role": "Netlify DevRel",
+        "linkedin_url": null
+      },
+      {
+        "name": "Chris Golda",
+        "role": "Rogue Capital",
+        "linkedin_url": null
+      },
+      {
+        "name": "Chris Nguyen",
+        "role": "LogDNA Founder",
+        "linkedin_url": null
+      },
+      {
+        "name": "Christian Bach",
+        "role": "Netlify Cofounder",
+        "linkedin_url": null
+      },
+      {
+        "name": "Elad Gill",
+        "role": "Investor",
+        "linkedin_url": null
+      },
+      {
+        "name": "Guillermo Rauch",
+        "role": "Vercel Founder",
+        "linkedin_url": null
+      },
+      {
+        "name": "Harold Giménez",
+        "role": "HashiCorp - VP Eng",
+        "linkedin_url": null
+      },
+      {
+        "name": "Jason Warner",
+        "role": "GitHub CTO",
+        "linkedin_url": null
+      },
+      {
+        "name": "Jeff Morris Jr.",
+        "role": "Chapter One",
+        "linkedin_url": null
+      },
+      {
+        "name": "Justin Gage",
+        "role": "Retool DevRel",
+        "linkedin_url": null
+      },
+      {
+        "name": "Kevin van Gundy",
+        "role": "Vercel CRO",
+        "linkedin_url": null
+      },
+      {
+        "name": "Kurt Mackey",
+        "role": "Fly Founder",
+        "linkedin_url": null
+      },
+      {
+        "name": "Lee Robinson",
+        "role": "Vercel DevRel",
+        "linkedin_url": null
+      },
+      {
+        "name": "Mathias Biilmann Christensen",
+        "role": "Netlify Cofounder",
+        "linkedin_url": null
+      },
+      {
+        "name": "Mike Krieger",
+        "role": "Instagram Cofounder",
+        "linkedin_url": null
+      },
+      {
+        "name": "Pedro Canahuati",
+        "role": "1Password CTO, Ex-Facebook",
+        "linkedin_url": null
+      },
+      {
+        "name": "Piruze Sabuncu",
+        "role": "Stripe",
+        "linkedin_url": null
+      },
+      {
+        "name": "Ram Parami",
+        "role": "Customer Strategy at Blend",
+        "linkedin_url": null
+      },
+      {
+        "name": "Shawn Wang",
+        "role": "Temporal DevRel",
+        "linkedin_url": null
+      },
+      {
+        "name": "Solomon Hykes",
+        "role": "Docker Cofounder",
+        "linkedin_url": null
+      },
+      {
+        "name": "Thorsten Schaeff",
+        "role": "Stripe DevRel",
+        "linkedin_url": null
+      },
+      {
+        "name": "Tod Sacerdoti",
+        "role": "Pipedream Founder",
+        "linkedin_url": null
+      },
+      {
+        "name": "Todd and Rahul Angel Fund",
+        "role": "Todd and Rahul Angel Fund",
+        "linkedin_url": null
+      },
+      {
+        "name": "Tom Preston-Werner",
+        "role": "GitHub Cofounder",
+        "linkedin_url": null
+      },
+      {
+        "name": "Tyler McGinnis",
+        "role": "UI.dev Cofounder",
+        "linkedin_url": null
+      },
+      {
+        "name": "Yuri Sagalov",
+        "role": "Wayfinder Ventures",
+        "linkedin_url": null
+      },
+      {
+        "name": "Zach Waterfield",
+        "role": "On Deck",
+        "linkedin_url": null
       }
     ],
-    "confidence_score": 0.95
+    "confidence_score": 0.85
   },
   {
     "domain": "vapi.ai",
-    "company_overview": "Extraction could not be completed for vapi.ai. Could not parse valid JSON from LLM response for vapi.ai",
-    "target_audience": "Unavailable due to crawl or extraction limitation",
+    "company_overview": "Vapi is a developer platform that enables businesses to build advanced voice AI agents. It handles the complex infrastructure, allowing users to focus on creating engaging voice experiences and scaling their operations.",
+    "target_audience": "Enterprises, specifically those needing scalable voice AI solutions for customer support, appointment scheduling, and other complex workflows, including companies like Amazon Ring, Kavak, UnityAI, Spring Venture Group, and Fleetworks.",
     "contact_points": [],
-    "leadership": [],
-    "confidence_score": 0.0
+    "leadership": [
+      {
+        "name": "Jason Mitura",
+        "role": "VP of Software Development",
+        "linkedin_url": null
+      }
+    ],
+    "confidence_score": 0.95
   }
 ]
